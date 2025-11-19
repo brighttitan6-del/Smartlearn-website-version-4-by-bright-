@@ -43,6 +43,7 @@ export interface LiveSession {
   thumbnail: string;
   isLive: boolean;
   price: number;
+  recordingUrl?: string;
 }
 
 export interface CourseCategory {

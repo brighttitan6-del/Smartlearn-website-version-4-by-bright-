@@ -99,6 +99,17 @@ export const UPCOMING_LIVE_SESSIONS: LiveSession[] = [
     thumbnail: 'https://picsum.photos/seed/live2/400/225',
     isLive: false,
     price: 500
+  },
+  {
+    id: 'rec1',
+    title: 'Biology: Digestive System (Recorded)',
+    instructorName: 'Dr. Sarah Smith',
+    startTime: new Date(Date.now() - 86400000).toISOString(), // 24 hours ago
+    platform: 'INTERNAL',
+    thumbnail: 'https://picsum.photos/seed/rec1/400/225',
+    isLive: false,
+    price: 200,
+    recordingUrl: 'https://www.youtube.com/embed/q4sP9h8t2y0' // Mock recording
   }
 ];
 
