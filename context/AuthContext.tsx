@@ -5,6 +5,7 @@ import { MOCK_USERS } from '../services/mockData';
 interface AuthContextType {
   user: User | null;
   login: (email: string, role: UserRole) => boolean;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   subscribe: (plan: SubscriptionPlan, method: 'AIRTEL' | 'TNM', phone: string) => Promise<boolean>;
@@ -17,10 +18,33 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Local Database Simulation to remember new users (including Google users)
+  const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => {
+    const stored = localStorage.getItem('sl_db_users');
+    if (stored) return JSON.parse(stored);
+    // Seed with mock users if DB is empty
+    localStorage.setItem('sl_db_users', JSON.stringify(MOCK_USERS));
+    return MOCK_USERS;
+  });
+
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('sl_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  // Helper to update user in both DB (registeredUsers) and Session (user)
+  const updateUserRecord = (updatedUser: User) => {
+    // Update DB
+    const newDb = registeredUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
+    setRegisteredUsers(newDb);
+    localStorage.setItem('sl_db_users', JSON.stringify(newDb));
+    
+    // Update Session if it's the current user
+    if (user && user.id === updatedUser.id) {
+      setUser(updatedUser);
+      localStorage.setItem('sl_user', JSON.stringify(updatedUser));
+    }
+  };
 
   // Check expiry on load and periodically
   useEffect(() => {
@@ -30,8 +54,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const expiry = new Date(user.subscriptionExpiry);
         if (now > expiry && user.subscriptionStatus === 'ACTIVE') {
           const updatedUser = { ...user, subscriptionStatus: 'EXPIRED' as const };
-          setUser(updatedUser);
-          localStorage.setItem('sl_user', JSON.stringify(updatedUser));
+          updateUserRecord(updatedUser);
         }
       }
     };
@@ -39,25 +62,76 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkExpiry();
     const interval = setInterval(checkExpiry, 60000); // Check every minute
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, registeredUsers]);
 
   const login = (email: string, role: UserRole) => {
-    const foundUser = MOCK_USERS.find(u => u.email === email && u.role === role);
+    // Check against local DB instead of just MOCK_USERS
+    const foundUser = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.role === role);
     
-    // For new users (simulation), default to NO subscription
-    const sessionUser: User = foundUser || {
-      id: Math.random().toString(36).substr(2, 9),
-      name: email.split('@')[0],
-      email,
-      role,
-      avatar: `https://ui-avatars.com/api/?name=${email}&background=random`,
-      subscriptionStatus: role === UserRole.TEACHER ? 'ACTIVE' : 'NONE',
-      unlockedLiveSessions: [],
-      purchasedBooks: []
-    };
+    // For new users via Email login (simulation), create a transient or persistent user
+    let sessionUser: User;
+
+    if (foundUser) {
+        sessionUser = foundUser;
+    } else {
+        // Create new user and add to DB
+        sessionUser = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: email.split('@')[0],
+            email,
+            role,
+            avatar: `https://ui-avatars.com/api/?name=${email}&background=random`,
+            subscriptionStatus: role === UserRole.TEACHER ? 'ACTIVE' : 'NONE',
+            unlockedLiveSessions: [],
+            purchasedBooks: []
+        };
+        const newDb = [...registeredUsers, sessionUser];
+        setRegisteredUsers(newDb);
+        localStorage.setItem('sl_db_users', JSON.stringify(newDb));
+    }
 
     setUser(sessionUser);
     localStorage.setItem('sl_user', JSON.stringify(sessionUser));
+    return true;
+  };
+
+  const loginWithGoogle = async (): Promise<boolean> => {
+    // Simulate Google OAuth popup and network delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Mock payload returned from Google
+    const googleProfile = {
+        email: "google.student@gmail.com",
+        name: "Google Student",
+        picture: "https://ui-avatars.com/api/?name=Google+Student&background=DB4437&color=fff"
+    };
+
+    // Check if user exists
+    let existingUser = registeredUsers.find(u => u.email === googleProfile.email);
+
+    if (existingUser) {
+        setUser(existingUser);
+        localStorage.setItem('sl_user', JSON.stringify(existingUser));
+    } else {
+        // Register new Google user
+        const newUser: User = {
+            id: "google_" + Math.random().toString(36).substr(2, 9),
+            name: googleProfile.name,
+            email: googleProfile.email,
+            role: UserRole.STUDENT, // Default to Student for social login
+            avatar: googleProfile.picture,
+            subscriptionStatus: 'NONE',
+            unlockedLiveSessions: [],
+            purchasedBooks: []
+        };
+        
+        const newDb = [...registeredUsers, newUser];
+        setRegisteredUsers(newDb);
+        localStorage.setItem('sl_db_users', JSON.stringify(newDb));
+        
+        setUser(newUser);
+        localStorage.setItem('sl_user', JSON.stringify(newUser));
+    }
     return true;
   };
 
@@ -84,8 +158,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       subscriptionExpiry: new Date(Date.now() + durationMs).toISOString()
     };
 
-    setUser(updatedUser);
-    localStorage.setItem('sl_user', JSON.stringify(updatedUser));
+    updateUserRecord(updatedUser);
     return true;
   };
 
@@ -101,8 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ...user,
         unlockedLiveSessions: [...currentUnlocked, sessionId]
       };
-      setUser(updatedUser);
-      localStorage.setItem('sl_user', JSON.stringify(updatedUser));
+      updateUserRecord(updatedUser);
     }
     return true;
   };
@@ -118,8 +190,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ...user,
         purchasedBooks: [...currentBooks, bookId]
       };
-      setUser(updatedUser);
-      localStorage.setItem('sl_user', JSON.stringify(updatedUser));
+      updateUserRecord(updatedUser);
     }
     return true;
   };
@@ -138,8 +209,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         ...user,
         purchasedBooks: [...currentBooks, ...newBookIds]
       };
-      setUser(updatedUser);
-      localStorage.setItem('sl_user', JSON.stringify(updatedUser));
+      updateUserRecord(updatedUser);
     }
     return true;
   };
@@ -150,7 +220,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, subscribe, unlockLiveSession, buyBook, buyBooks, refreshUser }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, isAuthenticated: !!user, subscribe, unlockLiveSession, buyBook, buyBooks, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
