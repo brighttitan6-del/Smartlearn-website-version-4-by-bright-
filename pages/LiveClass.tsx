@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { UPCOMING_LIVE_SESSIONS } from '../services/mockData';
 import { LiveSession, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,11 @@ export const LiveClass: React.FC = () => {
   
   // Simulation state for Teacher Recording
   const [isRecording, setIsRecording] = useState(false);
+  
+  // Camera State
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Check if the current user has unlocked a specific session
   const isUnlocked = (sessionId: string) => {
@@ -21,6 +26,7 @@ export const LiveClass: React.FC = () => {
     if (isUnlocked(session.id)) {
       setActiveSession(session);
       setIsRecording(false); // Reset recording state on new join
+      setCameraError(null);
     } else {
       setPayingForSession(session.id);
     }
@@ -44,6 +50,44 @@ export const LiveClass: React.FC = () => {
       alert("Class recording saved successfully! It will be available to students shortly.");
     }
   };
+
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' }, 
+        audio: true 
+      });
+      setStream(mediaStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (err: any) {
+      console.error("Error accessing camera:", err);
+      setCameraError("Could not access camera/microphone. Please allow permissions.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+  };
+
+  // Cleanup stream when session ends or component unmounts
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  // When activeSession changes to null, ensure camera is stopped
+  useEffect(() => {
+    if (!activeSession) {
+      stopCamera();
+    }
+  }, [activeSession]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 relative">
@@ -70,14 +114,64 @@ export const LiveClass: React.FC = () => {
                       ></iframe>
                   ) : (
                     // Live Mode
-                    <div className="text-center p-8 w-full h-full flex flex-col items-center justify-center bg-slate-900 relative">
+                    <div className="w-full h-full relative bg-slate-900 flex flex-col">
+                        {/* Video Element for Stream */}
+                        {stream && (
+                          <video 
+                            ref={videoRef} 
+                            autoPlay 
+                            muted={user?.role === UserRole.TEACHER} // Mute self to prevent feedback
+                            playsInline 
+                            className="absolute inset-0 w-full h-full object-cover z-0"
+                          />
+                        )}
+
+                        {/* Controls Overlay */}
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none">
+                            {!stream && (
+                                <div className="text-center p-8 pointer-events-auto">
+                                    <div className="animate-pulse mb-4">
+                                        <div className="w-16 h-16 bg-red-600 rounded-full mx-auto flex items-center justify-center shadow-lg shadow-red-500/50">
+                                            <div className="w-4 h-4 bg-white rounded-sm"></div>
+                                        </div>
+                                    </div>
+                                    <h3 className="text-2xl font-bold mb-2 text-white drop-shadow-md">Live Broadcast</h3>
+                                    <p className="text-slate-300 drop-shadow-md mb-4">Connected to Smartlearn Secure Stream</p>
+                                    
+                                    {user?.role === UserRole.TEACHER ? (
+                                        <div className="space-y-2">
+                                            <button 
+                                                onClick={startCamera}
+                                                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-full font-bold transition-all shadow-lg flex items-center gap-2 mx-auto"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                Start Camera
+                                            </button>
+                                            {cameraError && <p className="text-red-400 text-sm font-bold bg-black/50 px-2 py-1 rounded">{cameraError}</p>}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-slate-400">Waiting for instructor to start video...</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Teacher Controls (Always visible if teacher) */}
                         {user?.role === UserRole.TEACHER && (
-                           <div className="absolute top-4 right-4 z-10">
+                           <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+                             {stream && (
+                                <button 
+                                    onClick={stopCamera}
+                                    className="bg-slate-800/80 hover:bg-slate-700 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur-sm border border-slate-600"
+                                >
+                                    Stop Camera
+                                </button>
+                             )}
                              <button 
                                onClick={handleToggleRecording}
-                               className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all ${
+                               className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all shadow-lg backdrop-blur-sm ${
                                  isRecording 
-                                   ? 'bg-white text-red-600 animate-pulse' 
+                                   ? 'bg-white/90 text-red-600 animate-pulse border-2 border-red-500' 
                                    : 'bg-red-600 text-white hover:bg-red-700'
                                }`}
                              >
@@ -86,15 +180,10 @@ export const LiveClass: React.FC = () => {
                              </button>
                            </div>
                         )}
-                        <div className="animate-pulse mb-4">
-                            <div className="w-16 h-16 bg-red-600 rounded-full mx-auto flex items-center justify-center">
-                                <div className="w-4 h-4 bg-white rounded-sm"></div>
-                            </div>
-                        </div>
-                        <h3 className="text-2xl font-bold mb-2">Live Broadcast</h3>
-                        <p className="text-slate-400">Connected to Smartlearn Secure Stream</p>
-                        <div className="mt-4 p-2 bg-black/50 rounded text-xs font-mono text-green-400">
-                            Bitrate: 4500kbps | Latency: 120ms
+
+                        {/* Stream Info (Bottom Left) */}
+                        <div className="absolute bottom-4 left-4 z-20 p-2 bg-black/60 backdrop-blur-sm rounded text-xs font-mono text-green-400 border border-white/10">
+                            Bitrate: {stream ? '4500kbps' : '0kbps'} | Latency: 120ms
                         </div>
                     </div>
                   )}
