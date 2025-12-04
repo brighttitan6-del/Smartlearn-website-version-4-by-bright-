@@ -9,16 +9,42 @@ export const Login: React.FC = () => {
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Default to Student, Admin is now hidden
   const [role, setRole] = useState<UserRole>(UserRole.STUDENT);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, role);
-    navigate('/dashboard');
+    setError(null);
+
+    // --- SECRET ADMIN LOGIN CHECK ---
+    // If the specific admin credentials are used, we force the role to ADMIN
+    // regardless of what is selected in the dropdown.
+    if (email.toLowerCase() === 'support@smartlearn.com') {
+        if (password === 'grax2650') {
+            const success = login(email, UserRole.ADMIN);
+            if (success) {
+                navigate('/dashboard');
+                return;
+            }
+        } else {
+            setError('Invalid credentials.');
+            return;
+        }
+    }
+
+    // --- STANDARD LOGIN ---
+    const success = login(email, role);
+    
+    if (success) {
+        navigate('/dashboard');
+    } else {
+        setError('Invalid credentials or user not found. Please sign up if you are new.');
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -28,6 +54,7 @@ export const Login: React.FC = () => {
         navigate('/dashboard');
     } catch (error) {
         console.error("Google sign in failed", error);
+        setError("Google Sign-In failed.");
     } finally {
         setIsLoading(false);
     }
@@ -39,12 +66,18 @@ export const Login: React.FC = () => {
         <div>
           <div className="mx-auto h-12 w-12 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">SL</div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 dark:text-white">
-            {isSignup ? 'Create your account' : 'Sign in to your account'}
+            {isSignup ? 'Create your account' : 'Sign in to Smartlearn'}
           </h2>
           <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
             Or <a href={isSignup ? "/login" : "/login?signup=true"} className="font-medium text-primary-600 hover:text-primary-500">{isSignup ? 'sign in existing account' : 'create a new account'}</a>
           </p>
         </div>
+
+        {error && (
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-3 rounded text-sm text-center">
+                {error}
+            </div>
+        )}
 
         <div className="mt-6">
             <button 
@@ -77,29 +110,42 @@ export const Login: React.FC = () => {
         </div>
 
         <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
+          <div className="rounded-md shadow-sm space-y-4">
+            {isSignup && (
+                <div>
+                <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
+                <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required={isSignup}
+                    className="appearance-none block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white dark:bg-slate-800 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="John Doe"
+                />
+                </div>
+            )}
             <div>
-              <label htmlFor="email-address" className="sr-only">Email address</label>
+              <label htmlFor="email-address" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email address</label>
               <input
                 id="email-address"
                 name="email"
                 type="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white dark:bg-slate-800 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
+                className="appearance-none block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white dark:bg-slate-800 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
-              <label htmlFor="password" className="sr-only">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
               <input
                 id="password"
                 name="password"
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white dark:bg-slate-800 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
+                className="appearance-none block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white dark:bg-slate-800 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -112,10 +158,11 @@ export const Login: React.FC = () => {
               <select 
                 value={role} 
                 onChange={(e) => setRole(e.target.value as UserRole)}
-                className="ml-2 border-none bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 focus:ring-1"
+                className="ml-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 rounded px-2 py-1 focus:ring-primary-500"
               >
                 <option value={UserRole.STUDENT}>Student</option>
                 <option value={UserRole.TEACHER}>Teacher</option>
+                {/* Admin option hidden for security */}
               </select>
             </label>
             
@@ -129,7 +176,7 @@ export const Login: React.FC = () => {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+              className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
             >
               {isSignup ? 'Sign Up' : 'Sign In'}
             </button>

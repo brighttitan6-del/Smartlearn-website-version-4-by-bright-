@@ -1,404 +1,353 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { CATEGORIES, MOCK_LESSONS, UPCOMING_LIVE_SESSIONS } from '../services/mockData';
-import { UserRole } from '../types';
+import { CATEGORIES, MOCK_LESSONS, UPCOMING_LIVE_SESSIONS, MOCK_USERS, MOCK_BOOKS } from '../services/mockData';
+import { UserRole, User, Lesson, Book, LiveSession } from '../types';
 import { Navigate, Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'upload'>('overview');
-  // Teacher specific state
-  const [teacherTab, setTeacherTab] = useState<'overview' | 'courses' | 'live' | 'students'>('overview');
-  // Student specific state
-  const [studentTab, setStudentTab] = useState<'overview' | 'schedule'>('overview');
   
+  // --- STATE FOR ADMIN DASHBOARD ---
+  const [adminTab, setAdminTab] = useState('overview');
+  const [adminUsers, setAdminUsers] = useState<User[]>(MOCK_USERS);
+  const [adminLessons, setAdminLessons] = useState<Lesson[]>(MOCK_LESSONS);
+
+  // --- STATE FOR TEACHER DASHBOARD ---
+  const [teacherTab, setTeacherTab] = useState('overview');
   const [selectedUploadSubject, setSelectedUploadSubject] = useState<string | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [localLiveSessions, setLocalLiveSessions] = useState<LiveSession[]>(UPCOMING_LIVE_SESSIONS);
+  
+  // Teacher Edit State
+  const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
+  const [sessionForm, setSessionForm] = useState({
+      title: '',
+      price: 500,
+      startTime: '',
+      thumbnail: ''
+  });
 
   if (!user) return <Navigate to="/login" />;
 
-  const isTeacher = user.role === UserRole.TEACHER;
+  // --- HANDLERS (Teacher) ---
+  const handleEditSession = (session: LiveSession) => {
+      setEditingSession(session);
+      const date = new Date(session.startTime);
+      const isoString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+      setSessionForm({ title: session.title, price: session.price, startTime: isoString, thumbnail: session.thumbnail });
+      setIsScheduling(true);
+  };
 
-  // --- TEACHER COMPONENTS ---
+  const handleSaveSession = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (editingSession) {
+          setLocalLiveSessions(prev => prev.map(s => s.id === editingSession.id ? { ...s, title: sessionForm.title, price: Number(sessionForm.price), startTime: new Date(sessionForm.startTime).toISOString(), thumbnail: sessionForm.thumbnail || s.thumbnail } : s));
+          alert('Session updated!');
+      } else {
+          const newSession: LiveSession = { id: `lc-${Date.now()}`, title: sessionForm.title, price: Number(sessionForm.price), startTime: new Date(sessionForm.startTime).toISOString(), thumbnail: sessionForm.thumbnail || 'https://picsum.photos/seed/new/400/225', instructorName: user.name, platform: 'INTERNAL', isLive: false };
+          setLocalLiveSessions(prev => [newSession, ...prev]);
+          alert('New session scheduled!');
+      }
+      resetForm();
+  };
 
-  const TeacherOverview = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase">Total Students</div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mt-2">1,248</div>
-          <div className="text-green-500 text-sm mt-1">↑ 12% this month</div>
+  const handleDeleteSession = (id: string) => {
+      if (window.confirm("Delete session?")) setLocalLiveSessions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const resetForm = () => { setIsScheduling(false); setEditingSession(null); setSessionForm({ title: '', price: 500, startTime: '', thumbnail: '' }); };
+
+
+  // ----------------------------------------------------------------------
+  // COMPONENT: ADMIN DASHBOARD
+  // ----------------------------------------------------------------------
+  const AdminDashboard = () => (
+    <div className="space-y-6 animate-fade-in pb-20">
+      <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg border border-slate-700">
+          <h2 className="text-2xl font-bold mb-1">Admin Control Center</h2>
+          <p className="opacity-80 text-sm">Welcome back, Administrator. You have full system access.</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="text-slate-500 text-xs font-bold uppercase">Users</div>
+          <div className="text-3xl font-bold mt-1">{adminUsers.length}</div>
         </div>
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase">Total Lessons</div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{MOCK_LESSONS.filter(l => l.instructorName === user.name).length + 15}</div>
-          <div className="text-slate-400 text-sm mt-1">Across 4 subjects</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="text-slate-500 text-xs font-bold uppercase">Revenue</div>
+          <div className="text-3xl font-bold text-green-600 mt-1">MWK 2.5M</div>
         </div>
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase">Upcoming Lives</div>
-          <div className="text-3xl font-bold text-primary-600 mt-2">
-            {UPCOMING_LIVE_SESSIONS.filter(s => s.instructorName === user.name).length}
-          </div>
-          <div className="text-slate-400 text-sm mt-1">Next: Tomorrow, 2PM</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="text-slate-500 text-xs font-bold uppercase">Pending</div>
+          <div className="text-3xl font-bold text-amber-500 mt-1">{adminUsers.filter(u => u.isPendingTeacher).length}</div>
         </div>
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase">Avg. Rating</div>
-          <div className="text-3xl font-bold text-amber-500 mt-2">4.8 ★</div>
-          <div className="text-slate-400 text-sm mt-1">From 340 reviews</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="text-slate-500 text-xs font-bold uppercase">Videos</div>
+          <div className="text-3xl font-bold mt-1">{adminLessons.length}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-          <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-white">Recent Activity</h3>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-start gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0">
-                <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xs font-bold">JS</div>
-                <div>
-                  <p className="text-sm text-slate-800 dark:text-slate-200"><span className="font-bold">John Student</span> completed "Algebra Basics"</p>
-                  <p className="text-xs text-slate-500">2 hours ago</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-white">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setTeacherTab('courses')} className="p-4 rounded-lg bg-primary-50 dark:bg-slate-800 text-primary-700 dark:text-primary-400 hover:bg-primary-100 transition-colors text-left">
-                    <div className="font-bold">Upload Lesson</div>
-                    <div className="text-xs opacity-70">Add new content</div>
-                </button>
-                <button onClick={() => setTeacherTab('live')} className="p-4 rounded-lg bg-secondary-50 dark:bg-slate-800 text-secondary-700 dark:text-secondary-400 hover:bg-secondary-100 transition-colors text-left">
-                    <div className="font-bold">Schedule Live</div>
-                    <div className="text-xs opacity-70">Create event</div>
-                </button>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const TeacherCourses = () => (
-    <div className="space-y-6 animate-fade-in">
-      {!selectedUploadSubject ? (
-        <>
-             <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">My Courses</h2>
-             </div>
-             
-             {/* Upload Grid */}
-             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-                <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Upload New Content</h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-6">Select a subject panel to upload a new lesson.</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {CATEGORIES.map((cat) => (
-                    <button
-                    key={cat.id}
-                    onClick={() => setSelectedUploadSubject(cat.name)}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-primary-500 hover:shadow-md transition-all text-center flex flex-col items-center justify-center gap-2 group"
-                    >
-                    <span className="text-3xl group-hover:scale-110 transition-transform">{cat.icon}</span>
-                    <span className="font-medium text-sm text-slate-700 dark:text-slate-200">{cat.name}</span>
-                    </button>
-                ))}
-                </div>
-            </div>
-
-            {/* Existing Lessons List */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-                    <thead className="bg-slate-50 dark:bg-slate-800">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Lesson Title</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Category</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Grade</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-                        {MOCK_LESSONS.map((lesson) => (
-                            <tr key={lesson.id}>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                        <div className="h-10 w-10 flex-shrink-0">
-                                            <img className="h-10 w-10 rounded object-cover" src={lesson.thumbnail} alt="" />
-                                        </div>
-                                        <div className="ml-4">
-                                            <div className="text-sm font-medium text-slate-900 dark:text-white">{lesson.title}</div>
-                                            <div className="text-sm text-slate-500">{lesson.duration}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">{lesson.category}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">{lesson.gradeLevel}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button className="text-primary-600 hover:text-primary-900 mr-3">Edit</button>
-                                    <button className="text-red-600 hover:text-red-900">Delete</button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </>
-      ) : (
-        // Upload Form
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 animate-fade-in">
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-1 overflow-x-auto">
+        {['overview', 'users', 'content'].map(tab => (
             <button 
-            onClick={() => setSelectedUploadSubject(null)}
-            className="mb-4 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                key={tab}
+                onClick={() => setAdminTab(tab)} 
+                className={`px-6 py-2 capitalize font-medium text-sm transition-colors ${adminTab === tab ? 'text-primary-600 border-b-2 border-primary-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
             >
-            ← Back to Subject Selection
+                {tab}
             </button>
-            <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
-            Upload to {selectedUploadSubject} Panel
-            </h2>
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert('Video uploaded successfully!'); setSelectedUploadSubject(null); }}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Lesson Title</label>
-                    <input type="text" required className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white" placeholder="e.g. Introduction to Photosynthesis" />
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {adminTab === 'overview' && (
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+              <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-white">System Status</h3>
+              <p className="text-green-500 font-bold flex items-center gap-2"><span className="w-3 h-3 bg-green-500 rounded-full"></span> All Systems Operational</p>
+          </div>
+      )}
+
+      {adminTab === 'users' && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <h3 className="p-4 font-bold border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800">Teacher Approvals</h3>
+            {adminUsers.filter(u => u.isPendingTeacher).length === 0 ? (
+                <p className="p-8 text-center text-slate-500">No pending teacher applications.</p>
+            ) : (
+                <div className="divide-y dark:divide-slate-800">
+                    {adminUsers.filter(u => u.isPendingTeacher).map(t => (
+                        <div key={t.id} className="p-4 flex justify-between items-center">
+                            <div>
+                                <p className="font-bold">{t.name}</p>
+                                <p className="text-sm text-slate-500">{t.email}</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => { setAdminUsers(u => u.map(x => x.id === t.id ? {...x, isPendingTeacher: false} : x)); alert('Approved'); }} className="px-3 py-1 bg-green-600 text-white rounded text-sm">Approve</button>
+                                <button onClick={() => { setAdminUsers(u => u.filter(x => x.id !== t.id)); alert('Rejected'); }} className="px-3 py-1 bg-red-600 text-white rounded text-sm">Reject</button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target Grade</label>
-                    <select className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white">
-                        <option>Form 1</option>
-                        <option>Form 2</option>
-                        <option>Form 3</option>
-                        <option>Form 4</option>
-                        <option>Form 5</option>
-                        <option>Form 6</option>
-                    </select>
-                </div>
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Internal Video ID / Source</label>
-                <input type="text" required className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white" placeholder="Paste internal resource ID or file path" />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description & Notes</label>
-                <textarea className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white" rows={4} placeholder="What will students learn?"></textarea>
-            </div>
-            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                <h4 className="font-medium text-sm mb-2 text-slate-700 dark:text-slate-300">Teacher Verification</h4>
-                <div className="flex items-center gap-2">
-                    <input type="checkbox" id="approve" required className="w-4 h-4 text-primary-600 rounded" />
-                    <label htmlFor="approve" className="text-sm text-slate-600 dark:text-slate-400">
-                    I confirm this content is appropriate for the selected grade and subject.
-                    </label>
-                </div>
-            </div>
-            <button className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-bold shadow-lg shadow-primary-600/20">
-                Upload Video
-            </button>
-            </form>
+            )}
         </div>
+      )}
+      
+      {adminTab === 'content' && (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+              <h3 className="p-4 font-bold border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800">Manage Content</h3>
+              <div className="divide-y dark:divide-slate-800 max-h-96 overflow-y-auto">
+                  {adminLessons.map(l => (
+                      <div key={l.id} className="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                          <div className="flex items-center gap-3">
+                              <img src={l.thumbnail} className="w-12 h-8 rounded object-cover" alt="" />
+                              <div>
+                                  <p className="text-sm font-medium text-slate-900 dark:text-white line-clamp-1">{l.title}</p>
+                                  <p className="text-xs text-slate-500">By {l.instructorName}</p>
+                              </div>
+                          </div>
+                          <button className="text-red-500 hover:text-red-700 p-2">
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                      </div>
+                  ))}
+              </div>
+          </div>
       )}
     </div>
   );
 
-  const TeacherLive = () => (
-    <div className="space-y-6 animate-fade-in">
-         <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Live Sessions Management</h2>
-            <button onClick={() => setIsScheduling(!isScheduling)} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-bold">
-                {isScheduling ? 'Cancel Scheduling' : '+ Schedule New Session'}
-            </button>
-         </div>
+  // ----------------------------------------------------------------------
+  // TEACHER DASHBOARD
+  // ----------------------------------------------------------------------
+  const TeacherDashboard = () => (
+    <div className="space-y-6 animate-fade-in pb-20">
+      <div className="flex gap-2 overflow-x-auto pb-2">
+         <button onClick={() => setTeacherTab('overview')} className={`px-4 py-2 rounded-lg text-sm font-bold ${teacherTab === 'overview' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600'}`}>Overview</button>
+         <button onClick={() => setTeacherTab('live')} className={`px-4 py-2 rounded-lg text-sm font-bold ${teacherTab === 'live' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600'}`}>Live Sessions</button>
+         <button onClick={() => setTeacherTab('courses')} className={`px-4 py-2 rounded-lg text-sm font-bold ${teacherTab === 'courses' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600'}`}>Uploads</button>
+      </div>
 
-         {isScheduling && (
-             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-                 <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">Schedule a Live Class</h3>
-                 <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert('Class Scheduled!'); setIsScheduling(false); }}>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Topic / Title</label>
-                            <input type="text" required className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Price (MWK)</label>
-                            <input type="number" required defaultValue={500} className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date & Time</label>
-                            <input type="datetime-local" required className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-white" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Thumbnail URL</label>
-                            <input type="url" placeholder="https://..." className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-white" />
-                        </div>
-                     </div>
-                     <button className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 w-full md:w-auto">
-                         Publish Schedule
-                     </button>
-                 </form>
-             </div>
-         )}
+      {teacherTab === 'overview' && (
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+              <h3 className="text-lg font-bold mb-2">Teacher Actions</h3>
+              <div className="flex justify-center gap-4">
+                  <button onClick={() => setTeacherTab('live')} className="px-6 py-3 bg-secondary-600 text-white rounded-lg font-bold shadow-lg hover:bg-secondary-700">Schedule Class</button>
+                  <button onClick={() => setTeacherTab('courses')} className="px-6 py-3 bg-primary-600 text-white rounded-lg font-bold shadow-lg hover:bg-primary-700">Upload Video</button>
+              </div>
+          </div>
+      )}
 
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             {UPCOMING_LIVE_SESSIONS.map(session => (
-                 <div key={session.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex gap-4 items-center">
-                     <img src={session.thumbnail} alt="" className="w-24 h-16 object-cover rounded-lg" />
-                     <div>
-                         <h4 className="font-bold text-slate-900 dark:text-white">{session.title}</h4>
-                         <p className="text-xs text-slate-500">{new Date(session.startTime).toLocaleString()}</p>
-                         <div className="flex items-center gap-2 mt-1">
-                             <span className={`text-xs px-2 py-0.5 rounded ${session.isLive ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                                 {session.isLive ? 'LIVE NOW' : 'Scheduled'}
-                             </span>
-                             <span className="text-xs font-mono text-primary-600">MWK {session.price}</span>
-                         </div>
-                     </div>
-                     <div className="ml-auto flex flex-col gap-2">
-                         <button className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 p-2 rounded">Edit</button>
-                     </div>
-                 </div>
-             ))}
-         </div>
+      {teacherTab === 'live' && (
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className="font-bold text-lg">Live Session Management</h3>
+                  <button onClick={() => isScheduling ? resetForm() : setIsScheduling(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold text-sm">
+                      {isScheduling ? 'Cancel' : '+ Schedule New Session'}
+                  </button>
+              </div>
+
+              {isScheduling && (
+                  <form onSubmit={handleSaveSession} className="mb-8 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                      <h4 className="font-bold mb-4">{editingSession ? 'Edit Session' : 'New Session'}</h4>
+                      <div className="space-y-4">
+                          <input type="text" placeholder="Session Title" required value={sessionForm.title} onChange={e => setSessionForm({...sessionForm, title: e.target.value})} className="w-full p-2 border rounded" />
+                          <div className="grid grid-cols-2 gap-4">
+                              <input type="number" placeholder="Price (MWK)" required value={sessionForm.price} onChange={e => setSessionForm({...sessionForm, price: Number(e.target.value)})} className="w-full p-2 border rounded" />
+                              <input type="datetime-local" required value={sessionForm.startTime} onChange={e => setSessionForm({...sessionForm, startTime: e.target.value})} className="w-full p-2 border rounded" />
+                          </div>
+                          <input type="url" placeholder="Thumbnail URL" value={sessionForm.thumbnail} onChange={e => setSessionForm({...sessionForm, thumbnail: e.target.value})} className="w-full p-2 border rounded" />
+                          <button type="submit" className="w-full py-2 bg-primary-600 text-white font-bold rounded">Save Session</button>
+                      </div>
+                  </form>
+              )}
+
+              <div className="space-y-4">
+                  {localLiveSessions.map(s => (
+                      <div key={s.id} className="flex justify-between items-center p-4 border rounded-lg hover:shadow-md transition-shadow">
+                          <div>
+                              <h4 className="font-bold">{s.title}</h4>
+                              <p className="text-xs text-slate-500">{new Date(s.startTime).toLocaleString()}</p>
+                              <div className="flex gap-2 mt-1">
+                                  <span className={`text-[10px] font-bold px-2 rounded ${s.isLive ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{s.isLive ? 'LIVE' : 'Scheduled'}</span>
+                                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 rounded">MWK {s.price}</span>
+                              </div>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                              <button onClick={() => handleEditSession(s)} className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded">Edit</button>
+                              <button onClick={() => handleDeleteSession(s.id)} className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1 rounded">Delete</button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
+
+      {teacherTab === 'courses' && (
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+              <h3 className="font-bold text-lg mb-4">Upload New Lesson</h3>
+              {!selectedUploadSubject ? (
+                  <div className="grid grid-cols-2 gap-4">
+                      {CATEGORIES.map(c => (
+                          <button key={c.id} onClick={() => setSelectedUploadSubject(c.name)} className="p-4 border rounded-xl hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-slate-800 transition-all flex flex-col items-center gap-2">
+                              <span className="text-2xl">{c.icon}</span>
+                              <span className="font-bold text-sm">{c.name}</span>
+                          </button>
+                      ))}
+                  </div>
+              ) : (
+                  <div className="animate-fade-in">
+                      <button onClick={() => setSelectedUploadSubject(null)} className="text-sm text-primary-600 font-bold mb-4">← Back to Subjects</button>
+                      <h4 className="font-bold text-xl mb-4">Upload to {selectedUploadSubject}</h4>
+                      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); alert('Lesson uploaded!'); setSelectedUploadSubject(null); }}>
+                          <input type="text" placeholder="Lesson Title" required className="w-full p-3 border rounded-lg" />
+                          <input type="text" placeholder="Video URL / Source ID" required className="w-full p-3 border rounded-lg" />
+                          <textarea placeholder="Lesson Description" className="w-full p-3 border rounded-lg" rows={3}></textarea>
+                          <button className="w-full py-3 bg-primary-600 text-white font-bold rounded-lg shadow-lg">Upload Video</button>
+                      </form>
+                  </div>
+              )}
+          </div>
+      )}
     </div>
   );
 
-  const TeacherStudents = () => (
-      <div className="space-y-6 animate-fade-in">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Student Progress</h2>
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-                <thead className="bg-slate-50 dark:bg-slate-800">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Student Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Course Focus</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Progress</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Last Active</th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-                    {[1,2,3,4,5].map((i) => (
-                        <tr key={i}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-white">Student {i}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">Mathematics (Form 4)</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                                        <div className="bg-primary-500 h-2 rounded-full" style={{ width: `${Math.random() * 100}%` }}></div>
-                                    </div>
-                                    <span className="text-xs text-slate-500">{(Math.random() * 100).toFixed(0)}%</span>
-                                </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">2 days ago</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-          </div>
-      </div>
-  );
-
-  // --- STUDENT COMPONENTS (Existing) ---
-  const StudentView = () => (
-      <div className="space-y-6">
+  // --- STUDENT COMPONENT ---
+  const StudentDashboard = () => (
+      <div className="space-y-6 animate-fade-in pb-20">
         <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10 transform translate-x-2 -translate-y-2">
-               <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
-            </div>
             <div className="flex justify-between items-start mb-4 relative z-10">
               <div>
-                 <h3 className="font-bold text-lg">Subscription Status</h3>
-                 <span className={`inline-block px-3 py-1 rounded-full text-sm font-mono mt-1 font-bold ${user.subscriptionStatus === 'ACTIVE' ? 'bg-green-400/30 text-green-100' : 'bg-red-400/30 text-red-100'}`}>
+                 <h3 className="font-bold text-lg">My Status</h3>
+                 <span className={`inline-block px-3 py-1 rounded-full text-xs font-mono mt-1 font-bold ${user.subscriptionStatus === 'ACTIVE' ? 'bg-green-400/30 text-green-100' : 'bg-red-400/30 text-red-100'}`}>
                    {user.subscriptionStatus}
                  </span>
               </div>
-              <Link to="/payment" className="bg-white text-primary-700 hover:bg-primary-50 px-4 py-2 rounded-lg font-bold text-sm shadow transition-colors">
-                {user.subscriptionStatus === 'ACTIVE' ? 'Extend Plan' : 'Upgrade Now'}
+              <Link to="/payment" className="bg-white text-primary-700 px-4 py-2 rounded-full font-bold text-xs shadow">
+                {user.subscriptionStatus === 'ACTIVE' ? 'Extend' : 'Upgrade'}
               </Link>
             </div>
             <div className="relative z-10">
-               <p className="text-primary-100">
-                  Current Plan: <span className="font-bold text-white">{user.currentPlan || 'None'}</span>
-              </p>
-              <p className="text-sm mt-1 text-primary-200">
-                  Expires: {user.subscriptionExpiry ? new Date(user.subscriptionExpiry).toDateString() : 'N/A'}
+               <p className="text-primary-100 text-sm">
+                  Plan: <span className="font-bold text-white">{user.currentPlan || 'None'}</span>
               </p>
             </div>
         </div>
+        
+        {/* Expanded Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <p className="text-xs text-slate-500 uppercase font-bold">Time Spent</p>
+            <div className="flex items-end gap-1">
+                <p className="text-2xl font-bold">12h</p>
+                <span className="text-xs text-green-500 mb-1">+2h</span>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <p className="text-xs text-slate-500 uppercase font-bold">Avg Score</p>
+            <p className="text-2xl font-bold text-primary-600">78%</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <p className="text-xs text-slate-500 uppercase font-bold">Lessons</p>
+            <p className="text-2xl font-bold">24</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <p className="text-xs text-slate-500 uppercase font-bold">Books</p>
+            <p className="text-2xl font-bold">{user.purchasedBooks?.length || 0}</p>
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-1">85%</div>
-            <div className="text-sm text-slate-600 dark:text-slate-400">Overall Completion</div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-4xl font-bold text-secondary-600 dark:text-secondary-400 mb-1">12</div>
-            <div className="text-sm text-slate-600 dark:text-slate-400">Lessons Completed</div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-1">{user.purchasedBooks?.length || 0}</div>
-            <div className="text-sm text-slate-600 dark:text-slate-400">Books Owned</div>
-          </div>
+        {/* Recent Activity */}
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+            <h3 className="font-bold mb-3">Recent Activity</h3>
+            <div className="space-y-3">
+                {[1, 2].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg">
+                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium">Watched Algebra Basics</p>
+                            <p className="text-xs text-slate-500">2 hours ago</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
       </div>
   );
 
+  // --- MAIN RENDER LOGIC ---
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-6 md:py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row gap-8">
           
-          <div className="w-full md:w-64 flex-shrink-0">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+          <div className="hidden md:block w-64 flex-shrink-0">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 text-center sticky top-24">
               <img src={user.avatar} alt={user.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-primary-100 dark:border-slate-700" />
               <h2 className="font-bold text-xl text-slate-900 dark:text-white">{user.name}</h2>
               <p className="text-sm text-primary-600 dark:text-primary-400 font-medium uppercase tracking-wide mb-6">{user.role}</p>
-              
-              <div className="flex flex-col gap-2 text-left">
-                {isTeacher ? (
-                    <>
-                        <button onClick={() => setTeacherTab('overview')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${teacherTab === 'overview' ? 'bg-primary-50 text-primary-700 dark:bg-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Overview</button>
-                        <button onClick={() => setTeacherTab('courses')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${teacherTab === 'courses' ? 'bg-primary-50 text-primary-700 dark:bg-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>My Courses</button>
-                        <button onClick={() => setTeacherTab('live')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${teacherTab === 'live' ? 'bg-primary-50 text-primary-700 dark:bg-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Live Schedule</button>
-                        <button onClick={() => setTeacherTab('students')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${teacherTab === 'students' ? 'bg-primary-50 text-primary-700 dark:bg-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Students</button>
-                    </>
-                ) : (
-                    <>
-                        <button onClick={() => setStudentTab('overview')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${studentTab === 'overview' ? 'bg-primary-50 text-primary-700 dark:bg-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Overview</button>
-                        <button onClick={() => setStudentTab('schedule')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${studentTab === 'schedule' ? 'bg-primary-50 text-primary-700 dark:bg-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>My Schedule</button>
-                    </>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* Main Content */}
           <div className="flex-1">
             <div className="mb-6">
                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                 {isTeacher ? (
-                     teacherTab === 'overview' ? 'Dashboard Overview' : 
-                     teacherTab === 'courses' ? 'Course Management' : 
-                     teacherTab === 'live' ? 'Live Sessions' : 'Student Progress'
-                 ) : (
-                     studentTab === 'overview' ? 'My Progress' : 'Class Schedule'
-                 )}
+                 {/* DYNAMIC TITLE BASED ON ROLE */}
+                 {user.role === UserRole.ADMIN ? 'Admin Dashboard' : 
+                  user.role === UserRole.TEACHER ? 'Teacher Dashboard' : 
+                  'Student Dashboard'}
                </h1>
             </div>
 
-            {isTeacher ? (
-                <>
-                    {teacherTab === 'overview' && <TeacherOverview />}
-                    {teacherTab === 'courses' && <TeacherCourses />}
-                    {teacherTab === 'live' && <TeacherLive />}
-                    {teacherTab === 'students' && <TeacherStudents />}
-                </>
+            {/* CONDITIONAL RENDERING BASED ON ROLE */}
+            {user.role === UserRole.ADMIN ? (
+                <AdminDashboard />
+            ) : user.role === UserRole.TEACHER ? (
+                <TeacherDashboard />
             ) : (
-                <>
-                    {studentTab === 'overview' && <StudentView />}
-                    {studentTab === 'schedule' && (
-                         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-                           <p className="text-slate-500 italic">No upcoming personal schedule items.</p>
-                         </div>
-                    )}
-                </>
+                <StudentDashboard />
             )}
           </div>
         </div>

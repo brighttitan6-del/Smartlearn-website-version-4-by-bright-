@@ -186,5 +186,16 @@ export const MOCK_USERS: User[] = [
     subscriptionStatus: 'ACTIVE',
     unlockedLiveSessions: [],
     purchasedBooks: []
+  },
+  // ADMIN USER - Hardcoded for system access
+  {
+    id: 'admin_main',
+    name: 'Smartlearn Admin',
+    email: 'support@smartlearn.com',
+    role: UserRole.ADMIN as any, // Type casting if enum wasn't updated yet, though I updated types below
+    avatar: 'https://ui-avatars.com/api/?name=Admin&background=000&color=fff',
+    subscriptionStatus: 'ACTIVE',
+    unlockedLiveSessions: [],
+    purchasedBooks: []
   }
 ];

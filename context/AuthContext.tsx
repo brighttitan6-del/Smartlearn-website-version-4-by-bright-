@@ -18,11 +18,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Local Database Simulation to remember new users (including Google users)
   const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => {
     const stored = localStorage.getItem('sl_db_users');
     if (stored) return JSON.parse(stored);
-    // Seed with mock users if DB is empty
     localStorage.setItem('sl_db_users', JSON.stringify(MOCK_USERS));
     return MOCK_USERS;
   });
@@ -32,21 +30,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Helper to update user in both DB (registeredUsers) and Session (user)
   const updateUserRecord = (updatedUser: User) => {
-    // Update DB
     const newDb = registeredUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
     setRegisteredUsers(newDb);
     localStorage.setItem('sl_db_users', JSON.stringify(newDb));
     
-    // Update Session if it's the current user
     if (user && user.id === updatedUser.id) {
       setUser(updatedUser);
       localStorage.setItem('sl_user', JSON.stringify(updatedUser));
     }
   };
 
-  // Check expiry on load and periodically
   useEffect(() => {
     const checkExpiry = () => {
       if (user && user.role === UserRole.STUDENT && user.subscriptionExpiry) {
@@ -60,28 +54,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     
     checkExpiry();
-    const interval = setInterval(checkExpiry, 60000); // Check every minute
+    const interval = setInterval(checkExpiry, 60000); 
     return () => clearInterval(interval);
   }, [user, registeredUsers]);
 
-  const login = (email: string, role: UserRole) => {
-    // Check against local DB instead of just MOCK_USERS
-    const foundUser = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && u.role === role);
+  const login = (email: string, selectedRole: UserRole) => {
+    // 1. FORCE ADMIN ROLE for specific email
+    if (email.toLowerCase() === 'support@smartlearn.com') {
+        const adminUser: User = {
+            id: 'admin-superuser',
+            name: 'Smartlearn Admin',
+            email: 'support@smartlearn.com',
+            role: UserRole.ADMIN, // Force ADMIN role
+            avatar: 'https://ui-avatars.com/api/?name=Admin&background=000&color=fff',
+            subscriptionStatus: 'ACTIVE',
+            unlockedLiveSessions: [],
+            purchasedBooks: []
+        };
+        setUser(adminUser);
+        localStorage.setItem('sl_user', JSON.stringify(adminUser));
+        return true;
+    }
+
+    // 2. Standard Login Logic
+    let foundUser = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
     
-    // For new users via Email login (simulation), create a transient or persistent user
     let sessionUser: User;
 
     if (foundUser) {
+        // Use the role from the DB, do not let the dropdown override it
         sessionUser = foundUser;
     } else {
-        // Create new user and add to DB
+        // Create new user (Sign Up simulation)
         sessionUser = {
             id: Math.random().toString(36).substr(2, 9),
             name: email.split('@')[0],
             email,
-            role,
+            role: selectedRole,
             avatar: `https://ui-avatars.com/api/?name=${email}&background=random`,
-            subscriptionStatus: role === UserRole.TEACHER ? 'ACTIVE' : 'NONE',
+            // Teachers get free access
+            subscriptionStatus: selectedRole === UserRole.TEACHER ? 'ACTIVE' : 'NONE',
             unlockedLiveSessions: [],
             purchasedBooks: []
         };
@@ -96,39 +108,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const loginWithGoogle = async (): Promise<boolean> => {
-    // Simulate Google OAuth popup and network delay
     await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Mock payload returned from Google
     const googleProfile = {
         email: "google.student@gmail.com",
         name: "Google Student",
         picture: "https://ui-avatars.com/api/?name=Google+Student&background=DB4437&color=fff"
     };
-
-    // Check if user exists
     let existingUser = registeredUsers.find(u => u.email === googleProfile.email);
-
     if (existingUser) {
         setUser(existingUser);
         localStorage.setItem('sl_user', JSON.stringify(existingUser));
     } else {
-        // Register new Google user
         const newUser: User = {
             id: "google_" + Math.random().toString(36).substr(2, 9),
             name: googleProfile.name,
             email: googleProfile.email,
-            role: UserRole.STUDENT, // Default to Student for social login
+            role: UserRole.STUDENT, 
             avatar: googleProfile.picture,
             subscriptionStatus: 'NONE',
             unlockedLiveSessions: [],
             purchasedBooks: []
         };
-        
         const newDb = [...registeredUsers, newUser];
         setRegisteredUsers(newDb);
         localStorage.setItem('sl_db_users', JSON.stringify(newDb));
-        
         setUser(newUser);
         localStorage.setItem('sl_user', JSON.stringify(newUser));
     }
@@ -142,10 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const subscribe = async (plan: SubscriptionPlan, method: 'AIRTEL' | 'TNM', phone: string): Promise<boolean> => {
     if (!user) return false;
-
-    // Simulate API call payment delay
     await new Promise(resolve => setTimeout(resolve, 2000));
-
     let durationMs = 0;
     if (plan === 'DAILY') durationMs = 24 * 60 * 60 * 1000;
     if (plan === 'WEEKLY') durationMs = 7 * 24 * 60 * 60 * 1000;
@@ -157,17 +157,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       currentPlan: plan,
       subscriptionExpiry: new Date(Date.now() + durationMs).toISOString()
     };
-
     updateUserRecord(updatedUser);
     return true;
   };
 
   const unlockLiveSession = async (sessionId: string): Promise<boolean> => {
     if (!user) return false;
-    
-    // Simulate API Payment
     await new Promise(resolve => setTimeout(resolve, 1500));
-
     const currentUnlocked = user.unlockedLiveSessions || [];
     if (!currentUnlocked.includes(sessionId)) {
       const updatedUser = {
@@ -181,9 +177,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const buyBook = async (bookId: string): Promise<boolean> => {
     if (!user) return false;
-    // Simulate API Payment
     await new Promise(resolve => setTimeout(resolve, 1500));
-
     const currentBooks = user.purchasedBooks || [];
     if (!currentBooks.includes(bookId)) {
       const updatedUser = {
@@ -197,13 +191,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const buyBooks = async (bookIds: string[]): Promise<boolean> => {
     if (!user) return false;
-    // Simulate API Payment
     await new Promise(resolve => setTimeout(resolve, 2000));
-
     const currentBooks = user.purchasedBooks || [];
-    // Filter out ones already owned to be safe
     const newBookIds = bookIds.filter(id => !currentBooks.includes(id));
-    
     if (newBookIds.length > 0) {
       const updatedUser = {
         ...user,

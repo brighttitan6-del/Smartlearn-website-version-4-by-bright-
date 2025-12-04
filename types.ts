@@ -1,6 +1,7 @@
 export enum UserRole {
   STUDENT = 'STUDENT',
   TEACHER = 'TEACHER',
+  ADMIN = 'ADMIN', // Added ADMIN role
   GUEST = 'GUEST',
 }
 
@@ -18,6 +19,7 @@ export interface User {
   currentPlan?: SubscriptionPlan;
   unlockedLiveSessions?: string[]; // IDs of live sessions paid for
   purchasedBooks?: string[]; // IDs of books bought
+  isPendingTeacher?: boolean; // For admin approval
 }
 
 export interface Lesson {
