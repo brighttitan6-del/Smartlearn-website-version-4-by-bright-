@@ -23,7 +23,7 @@ export const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Contact</h3>
             <ul className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
               <li>support@smartlearn.com</li>
-              <li>+1 (555) 123-4567</li>
+              <li>+265 998 235 818 / +265 883 526 602</li>
             </ul>
           </div>
         </div>

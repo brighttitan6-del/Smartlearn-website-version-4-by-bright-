@@ -9,12 +9,19 @@ export const LiveClass: React.FC = () => {
   const [payingForSession, setPayingForSession] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   
-  // Simulation state for Teacher Recording
+  // Teacher State
   const [isRecording, setIsRecording] = useState(false);
+  const teacherVideoRef = useRef<HTMLVideoElement>(null);
+  const [teacherStream, setTeacherStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(1);
   
-  // Camera State
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  // Student State
+  const studentVideoRef = useRef<HTMLVideoElement>(null);
+  const [studentStream, setStudentStream] = useState<MediaStream | null>(null);
+  const [isStudentCamOn, setIsStudentCamOn] = useState(false);
+
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Check if the current user has unlocked a specific session
@@ -25,8 +32,11 @@ export const LiveClass: React.FC = () => {
   const handleJoinClick = (session: LiveSession) => {
     if (isUnlocked(session.id)) {
       setActiveSession(session);
-      setIsRecording(false); // Reset recording state on new join
+      setIsRecording(false); 
       setCameraError(null);
+      setTeacherStream(null);
+      setStudentStream(null);
+      setIsStudentCamOn(false);
     } else {
       setPayingForSession(session.id);
     }
@@ -37,7 +47,6 @@ export const LiveClass: React.FC = () => {
     await unlockLiveSession(payingForSession);
     setPayingForSession(null);
     setPhoneNumber('');
-    // Auto join after unlock
     const session = UPCOMING_LIVE_SESSIONS.find(s => s.id === payingForSession);
     if (session) setActiveSession(session);
   };
@@ -51,58 +60,126 @@ export const LiveClass: React.FC = () => {
     }
   };
 
-  const startCamera = async () => {
+  // --- Camera Logic ---
+
+  const startTeacherCamera = async (mode: 'user' | 'environment' = facingMode) => {
     setCameraError(null);
+    if (teacherStream) {
+        teacherStream.getTracks().forEach(track => track.stop());
+    }
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user' }, 
-        audio: true 
-      });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+      // Request zoom capabilities if supported by browser
+      const constraints: MediaStreamConstraints = { 
+          video: { facingMode: mode, zoom: true } as any, // Cast to any for TS zoom support
+          audio: true 
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      setTeacherStream(stream);
+      setFacingMode(mode);
+
+      // Check zoom capabilities
+      const track = stream.getVideoTracks()[0];
+      const capabilities = (track.getCapabilities ? track.getCapabilities() : {}) as any;
+      
+      if (capabilities.zoom) {
+          setMaxZoom(capabilities.zoom.max);
+          setZoomLevel(1); // Reset zoom on camera switch
+      } else {
+          setMaxZoom(1);
       }
+
     } catch (err: any) {
-      console.error("Error accessing camera:", err);
-      setCameraError("Could not access camera/microphone. Please allow permissions.");
+      console.error("Error accessing teacher camera:", err);
+      setCameraError("Could not access camera. Please allow permissions in your browser settings.");
     }
   };
 
-  const stopCamera = () => {
+  const toggleCamera = () => {
+      const newMode = facingMode === 'user' ? 'environment' : 'user';
+      startTeacherCamera(newMode);
+  };
+
+  const handleZoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newZoom = parseFloat(e.target.value);
+      setZoomLevel(newZoom);
+      if (teacherStream) {
+          const track = teacherStream.getVideoTracks()[0];
+          if (track && 'applyConstraints' in track) {
+              const constraints = { advanced: [{ zoom: newZoom }] };
+              track.applyConstraints(constraints as any).catch(err => console.log('Zoom not supported', err));
+          }
+      }
+  };
+
+  const startStudentCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setStudentStream(stream);
+      setIsStudentCamOn(true);
+    } catch (err: any) {
+      console.error("Error accessing student camera:", err);
+      setCameraError("Could not share video. Please allow permissions.");
+    }
+  };
+
+  const stopStream = (stream: MediaStream | null, setStream: React.Dispatch<React.SetStateAction<MediaStream | null>>) => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
     }
   };
 
-  // Cleanup stream when session ends or component unmounts
+  // Attach streams to video elements
+  useEffect(() => {
+    if (teacherStream && teacherVideoRef.current) {
+      teacherVideoRef.current.srcObject = teacherStream;
+    }
+  }, [teacherStream]);
+
+  useEffect(() => {
+    if (studentStream && studentVideoRef.current) {
+      studentVideoRef.current.srcObject = studentStream;
+    }
+  }, [studentStream]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopCamera();
+      if (teacherStream) teacherStream.getTracks().forEach(t => t.stop());
+      if (studentStream) studentStream.getTracks().forEach(t => t.stop());
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When activeSession changes to null, ensure camera is stopped
-  useEffect(() => {
-    if (!activeSession) {
-      stopCamera();
-    }
-  }, [activeSession]);
+  const stopStudentCamera = () => {
+      stopStream(studentStream, setStudentStream);
+      setIsStudentCamOn(false);
+  };
+
+  const stopTeacherCamera = () => {
+      stopStream(teacherStream, setTeacherStream);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">Smartlearn Live & Recorded Classes</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-lg">Exclusive real-time classes and past session recordings.</p>
-        </div>
+        {!activeSession && (
+            <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">Smartlearn Live</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-lg">Interactive live classes with real-time video.</p>
+            </div>
+        )}
 
         {activeSession ? (
-          <div className="bg-black rounded-2xl overflow-hidden shadow-2xl mb-12 ring-4 ring-primary-500/20">
+          <div className="bg-black rounded-2xl overflow-hidden shadow-2xl mb-12 ring-4 ring-primary-500/20 relative">
             <div className="aspect-w-16 aspect-h-9 relative bg-slate-900 flex flex-col items-center justify-center text-white pb-[56.25%]">
-              <div className="absolute inset-0 flex items-center justify-center">
-                  {/* Internal Video Player Simulation */}
+              <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                  
+                  {/* --- MAIN BROADCAST AREA --- */}
+                  
                   {activeSession.recordingUrl ? (
                      // Playback Mode
                      <iframe 
@@ -115,94 +192,149 @@ export const LiveClass: React.FC = () => {
                   ) : (
                     // Live Mode
                     <div className="w-full h-full relative bg-slate-900 flex flex-col">
-                        {/* Video Element for Stream */}
-                        {stream && (
-                          <video 
-                            ref={videoRef} 
-                            autoPlay 
-                            muted={user?.role === UserRole.TEACHER} // Mute self to prevent feedback
-                            playsInline 
-                            className="absolute inset-0 w-full h-full object-cover z-0"
-                          />
+                        
+                        {/* TEACHER VIEW: Shows Local Camera */}
+                        {user?.role === UserRole.TEACHER ? (
+                            teacherStream ? (
+                                <video ref={teacherVideoRef} autoPlay muted playsInline className={`absolute inset-0 w-full h-full object-cover z-0 ${facingMode === 'user' ? 'transform scale-x-[-1]' : ''}`} />
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-0">
+                                    <div className="text-center">
+                                        <p className="text-slate-400 mb-4">Camera is off</p>
+                                        <button onClick={() => startTeacherCamera('user')} className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-full font-bold transition-all shadow-lg flex items-center gap-2 mx-auto">
+                                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                            Start Broadcast
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        ) : (
+                            /* STUDENT VIEW: Shows Simulated Teacher Stream */
+                            <div className="absolute inset-0 w-full h-full z-0">
+                                <video 
+                                    src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+                                    autoPlay
+                                    muted
+                                    loop
+                                    playsInline
+                                    className="w-full h-full object-cover"
+                                />
+                                <div className="absolute top-4 left-4 bg-red-600 px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wider animate-pulse shadow-md z-10">
+                                    LIVE
+                                </div>
+                            </div>
                         )}
 
-                        {/* Controls Overlay */}
-                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none">
-                            {!stream && (
-                                <div className="text-center p-8 pointer-events-auto">
-                                    <div className="animate-pulse mb-4">
-                                        <div className="w-16 h-16 bg-red-600 rounded-full mx-auto flex items-center justify-center shadow-lg shadow-red-500/50">
-                                            <div className="w-4 h-4 bg-white rounded-sm"></div>
-                                        </div>
-                                    </div>
-                                    <h3 className="text-2xl font-bold mb-2 text-white drop-shadow-md">Live Broadcast</h3>
-                                    <p className="text-slate-300 drop-shadow-md mb-4">Connected to Smartlearn Secure Stream</p>
-                                    
-                                    {user?.role === UserRole.TEACHER ? (
-                                        <div className="space-y-2">
-                                            <button 
-                                                onClick={startCamera}
-                                                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-full font-bold transition-all shadow-lg flex items-center gap-2 mx-auto"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                                Start Camera
-                                            </button>
-                                            {cameraError && <p className="text-red-400 text-sm font-bold bg-black/50 px-2 py-1 rounded">{cameraError}</p>}
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-slate-400">Waiting for instructor to start video...</p>
-                                    )}
+                        {/* --- STUDENT SELF-VIEW PIP (Picture in Picture) --- */}
+                        {user?.role === UserRole.STUDENT && isStudentCamOn && (
+                            <div className="absolute top-4 right-4 w-32 h-48 md:w-48 md:h-36 bg-black rounded-lg border-2 border-white/20 shadow-2xl overflow-hidden z-30 drag-handle">
+                                <video ref={studentVideoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
+                                <div className="absolute bottom-1 right-1">
+                                    <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black"></div>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
 
-                        {/* Teacher Controls (Always visible if teacher) */}
-                        {user?.role === UserRole.TEACHER && (
-                           <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-                             {stream && (
-                                <button 
-                                    onClick={stopCamera}
-                                    className="bg-slate-800/80 hover:bg-slate-700 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur-sm border border-slate-600"
-                                >
-                                    Stop Camera
-                                </button>
+                        {/* --- CONTROLS OVERLAY --- */}
+                        
+                        {/* Error Message */}
+                        {cameraError && (
+                            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-red-900/90 text-white px-4 py-2 rounded-lg text-sm font-medium z-50">
+                                {cameraError}
+                            </div>
+                        )}
+
+                        {/* Top Right Controls for Teacher */}
+                        {user?.role === UserRole.TEACHER && teacherStream && (
+                           <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 bg-black/40 backdrop-blur-md p-2 rounded-xl border border-white/10">
+                             
+                             {/* Camera Toggle */}
+                             <button onClick={toggleCamera} className="p-2 bg-white/20 hover:bg-white/30 rounded-full text-white transition-all" title="Flip Camera">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                             </button>
+
+                             {/* Zoom Slider (Only if supported) */}
+                             {maxZoom > 1 && (
+                                 <div className="flex flex-col items-center py-2">
+                                     <span className="text-[10px] text-white font-bold mb-1">{zoomLevel}x</span>
+                                     <input 
+                                        type="range" 
+                                        min="1" 
+                                        max={maxZoom} 
+                                        step="0.1" 
+                                        value={zoomLevel} 
+                                        onChange={handleZoomChange}
+                                        className="h-24 w-1 bg-white/30 rounded-lg appearance-none cursor-pointer vertical-slider"
+                                        style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                                     />
+                                 </div>
                              )}
+
+                             <div className="h-px w-full bg-white/20 my-1"></div>
+
                              <button 
                                onClick={handleToggleRecording}
-                               className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all shadow-lg backdrop-blur-sm ${
+                               className={`p-2 rounded-full transition-all ${
                                  isRecording 
-                                   ? 'bg-white/90 text-red-600 animate-pulse border-2 border-red-500' 
-                                   : 'bg-red-600 text-white hover:bg-red-700'
+                                   ? 'bg-white text-red-600 animate-pulse' 
+                                   : 'bg-white/10 text-white hover:bg-white/20'
                                }`}
+                               title="Record"
                              >
-                               <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-600' : 'bg-white'}`}></div>
-                               {isRecording ? 'Recording...' : 'Start Recording'}
+                               <div className={`w-4 h-4 rounded-sm ${isRecording ? 'bg-red-600' : 'bg-white rounded-full'}`}></div>
+                             </button>
+
+                             <button 
+                                onClick={stopTeacherCamera}
+                                className="p-2 bg-red-600/80 hover:bg-red-700 rounded-full text-white transition-all mt-1" 
+                                title="Stop Camera"
+                             >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                              </button>
                            </div>
                         )}
 
-                        {/* Stream Info (Bottom Left) */}
-                        <div className="absolute bottom-4 left-4 z-20 p-2 bg-black/60 backdrop-blur-sm rounded text-xs font-mono text-green-400 border border-white/10">
-                            Bitrate: {stream ? '4500kbps' : '0kbps'} | Latency: 120ms
+                        {/* Bottom Control Bar */}
+                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent z-20 flex justify-between items-end">
+                            <div className="text-white">
+                                <h3 className="font-bold text-lg leading-tight">{activeSession.title}</h3>
+                                <p className="text-slate-300 text-sm">{activeSession.instructorName}</p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                {user?.role === UserRole.STUDENT && (
+                                    <button 
+                                        onClick={isStudentCamOn ? stopStudentCamera : startStudentCamera}
+                                        className={`px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition-all shadow-lg ${isStudentCamOn ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        {isStudentCamOn ? 'Stop Video' : 'Share Video'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                   )}
               </div>
             </div>
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h2 className="text-2xl font-bold">{activeSession.title}</h2>
-                  {activeSession.recordingUrl ? (
-                    <span className="bg-blue-600 text-xs px-2 py-1 rounded font-bold uppercase">Recorded</span>
-                  ) : (
-                    <span className="bg-red-600 text-xs px-2 py-1 rounded font-bold uppercase animate-pulse">Live</span>
-                  )}
-                </div>
-                <p className="text-slate-400">Instructor: {activeSession.instructorName}</p>
+            
+            {/* Session Info & Leave */}
+            <div className="p-6 bg-white dark:bg-slate-900 flex justify-between items-center rounded-b-2xl shadow-sm border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                 <div className={`w-3 h-3 rounded-full ${activeSession.recordingUrl ? 'bg-blue-500' : 'bg-red-500 animate-pulse'}`}></div>
+                 <span className="font-medium text-slate-700 dark:text-slate-300">{activeSession.recordingUrl ? 'Recorded Session' : 'Live Now'}</span>
               </div>
-              <button onClick={() => setActiveSession(null)} className="text-sm text-slate-400 hover:text-white underline">
-                Leave Session
+              <button 
+                onClick={() => {
+                    stopStudentCamera(); 
+                    stopTeacherCamera();
+                    setActiveSession(null);
+                }} 
+                className="px-6 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Leave Class
               </button>
             </div>
           </div>

@@ -29,6 +29,9 @@ export const Dashboard: React.FC = () => {
 
   if (!user) return <Navigate to="/login" />;
 
+  const isTeacher = user.role === UserRole.TEACHER;
+  const isAdmin = user.role === UserRole.ADMIN;
+
   // --- HANDLERS (Teacher) ---
   const handleEditSession = (session: LiveSession) => {
       setEditingSession(session);
@@ -61,7 +64,7 @@ export const Dashboard: React.FC = () => {
   // ----------------------------------------------------------------------
   // COMPONENT: ADMIN DASHBOARD
   // ----------------------------------------------------------------------
-  const AdminDashboard = () => (
+  const AdminDashboardComponent = () => (
     <div className="space-y-6 animate-fade-in pb-20">
       <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg border border-slate-700">
           <h2 className="text-2xl font-bold mb-1">Admin Control Center</h2>
@@ -117,14 +120,17 @@ export const Dashboard: React.FC = () => {
             ) : (
                 <div className="divide-y dark:divide-slate-800">
                     {adminUsers.filter(u => u.isPendingTeacher).map(t => (
-                        <div key={t.id} className="p-4 flex justify-between items-center">
-                            <div>
-                                <p className="font-bold">{t.name}</p>
-                                <p className="text-sm text-slate-500">{t.email}</p>
+                        <div key={t.id} className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                <img src={t.avatar} className="w-10 h-10 rounded-full" alt="" />
+                                <div>
+                                    <p className="font-bold text-slate-900 dark:text-white">{t.name}</p>
+                                    <p className="text-xs text-slate-500">{t.email}</p>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => { setAdminUsers(u => u.map(x => x.id === t.id ? {...x, isPendingTeacher: false} : x)); alert('Approved'); }} className="px-3 py-1 bg-green-600 text-white rounded text-sm">Approve</button>
-                                <button onClick={() => { setAdminUsers(u => u.filter(x => x.id !== t.id)); alert('Rejected'); }} className="px-3 py-1 bg-red-600 text-white rounded text-sm">Reject</button>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button onClick={() => { setAdminUsers(u => u.map(x => x.id === t.id ? {...x, isPendingTeacher: false} : x)); alert('Approved'); }} className="flex-1 sm:flex-none px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold">Approve</button>
+                                <button onClick={() => { setAdminUsers(u => u.filter(x => x.id !== t.id)); alert('Rejected'); }} className="flex-1 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold">Reject</button>
                             </div>
                         </div>
                     ))}
@@ -160,7 +166,7 @@ export const Dashboard: React.FC = () => {
   // ----------------------------------------------------------------------
   // TEACHER DASHBOARD
   // ----------------------------------------------------------------------
-  const TeacherDashboard = () => (
+  const TeacherDashboardComponent = () => (
     <div className="space-y-6 animate-fade-in pb-20">
       <div className="flex gap-2 overflow-x-auto pb-2">
          <button onClick={() => setTeacherTab('overview')} className={`px-4 py-2 rounded-lg text-sm font-bold ${teacherTab === 'overview' ? 'bg-primary-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600'}`}>Overview</button>
@@ -253,7 +259,23 @@ export const Dashboard: React.FC = () => {
   );
 
   // --- STUDENT COMPONENT ---
-  const StudentDashboard = () => (
+  const StudentDashboardComponent = () => {
+    // Mock data for charts and breakdowns
+    const weeklyActivity = [35, 60, 25, 80, 45, 10, 5]; // Percentages for Mon-Sun
+    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const subjectProgress = [
+        { name: 'Mathematics', percent: 75, color: 'bg-blue-500' },
+        { name: 'English', percent: 45, color: 'bg-green-500' },
+        { name: 'Biology', percent: 90, color: 'bg-purple-500' },
+        { name: 'Physics', percent: 20, color: 'bg-orange-500' },
+    ];
+    const recentQuizzes = [
+        { title: 'Algebra Basics', score: '85%', date: '2 days ago' },
+        { title: 'Photosynthesis', score: '92%', date: '1 week ago' },
+        { title: 'Grammar 101', score: '60%', date: '2 weeks ago' },
+    ];
+
+    return (
       <div className="space-y-6 animate-fade-in pb-20">
         <div className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
             <div className="flex justify-between items-start mb-4 relative z-10">
@@ -273,49 +295,108 @@ export const Dashboard: React.FC = () => {
               </p>
             </div>
         </div>
-        
-        {/* Expanded Stats */}
-        <div className="grid grid-cols-2 gap-4">
+
+        {/* Detailed Stats Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-slate-500 uppercase font-bold">Time Spent</p>
-            <div className="flex items-end gap-1">
-                <p className="text-2xl font-bold">12h</p>
-                <span className="text-xs text-green-500 mb-1">+2h</span>
-            </div>
+            <div className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase mb-1">Time Spent</div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">12.5h</div>
+            <div className="text-xs text-green-500 font-medium">↑ 2.5h this week</div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-slate-500 uppercase font-bold">Avg Score</p>
-            <p className="text-2xl font-bold text-primary-600">78%</p>
+            <div className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase mb-1">Lessons</div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-white">24</div>
+            <div className="text-xs text-slate-500">Completed</div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-slate-500 uppercase font-bold">Lessons</p>
-            <p className="text-2xl font-bold">24</p>
+            <div className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase mb-1">Avg Score</div>
+            <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">79%</div>
+            <div className="text-xs text-slate-500">Across 5 quizzes</div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-slate-500 uppercase font-bold">Books</p>
-            <p className="text-2xl font-bold">{user.purchasedBooks?.length || 0}</p>
+            <div className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase mb-1">Books</div>
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">{user.purchasedBooks?.length || 0}</div>
+            <div className="text-xs text-slate-500">In library</div>
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <h3 className="font-bold mb-3">Recent Activity</h3>
-            <div className="space-y-3">
-                {[1, 2].map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium">Watched Algebra Basics</p>
-                            <p className="text-xs text-slate-500">2 hours ago</p>
-                        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Activity & Subjects */}
+            <div className="lg:col-span-2 space-y-6">
+                {/* Weekly Activity Chart (Visual) */}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <h3 className="font-bold text-slate-900 dark:text-white mb-6">Weekly Activity</h3>
+                    <div className="flex justify-between items-end h-32 gap-2">
+                        {weeklyActivity.map((height, idx) => (
+                            <div key={idx} className="flex flex-col items-center gap-2 flex-1">
+                                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-lg relative h-full flex items-end overflow-hidden group">
+                                    <div 
+                                        className="w-full bg-primary-500 rounded-t-lg transition-all duration-500 group-hover:bg-primary-600" 
+                                        style={{ height: `${height}%` }}
+                                    ></div>
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {height}%
+                                    </div>
+                                </div>
+                                <span className="text-xs text-slate-500 font-medium">{days[idx]}</span>
+                            </div>
+                        ))}
                     </div>
-                ))}
+                </div>
+
+                {/* Subject Breakdown */}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <h3 className="font-bold text-slate-900 dark:text-white mb-4">Subject Progress</h3>
+                    <div className="space-y-4">
+                        {subjectProgress.map((subject, idx) => (
+                            <div key={idx}>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-medium text-slate-700 dark:text-slate-300">{subject.name}</span>
+                                    <span className="text-slate-500">{subject.percent}%</span>
+                                </div>
+                                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5">
+                                    <div className={`h-2.5 rounded-full ${subject.color}`} style={{ width: `${subject.percent}%` }}></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Column: Quizzes & Insights */}
+            <div className="space-y-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <h3 className="font-bold text-slate-900 dark:text-white mb-4">Recent Quiz Results</h3>
+                    <div className="space-y-4">
+                        {recentQuizzes.map((quiz, idx) => (
+                            <div key={idx} className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{quiz.title}</p>
+                                    <p className="text-xs text-slate-500">{quiz.date}</p>
+                                </div>
+                                <span className={`text-sm font-bold ${parseInt(quiz.score) >= 80 ? 'text-green-500' : parseInt(quiz.score) >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
+                                    {quiz.score}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <button className="w-full mt-4 py-2 text-sm text-primary-600 font-medium hover:bg-primary-50 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                        View All Results
+                    </button>
+                </div>
+
+                <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-6 rounded-xl text-white shadow-lg">
+                    <h3 className="font-bold mb-2">Keep it up! 🔥</h3>
+                    <p className="text-sm text-violet-100 mb-4">You're on a 3-day learning streak. Complete one more lesson to reach your weekly goal.</p>
+                    <button className="bg-white text-violet-700 text-sm font-bold px-4 py-2 rounded-lg w-full hover:bg-violet-50 transition-colors">
+                        Continue Learning
+                    </button>
+                </div>
             </div>
         </div>
       </div>
-  );
+    );
+  };
 
   // --- MAIN RENDER LOGIC ---
   return (
@@ -343,11 +424,11 @@ export const Dashboard: React.FC = () => {
 
             {/* CONDITIONAL RENDERING BASED ON ROLE */}
             {user.role === UserRole.ADMIN ? (
-                <AdminDashboard />
+                <AdminDashboardComponent />
             ) : user.role === UserRole.TEACHER ? (
-                <TeacherDashboard />
+                <TeacherDashboardComponent />
             ) : (
-                <StudentDashboard />
+                <StudentDashboardComponent />
             )}
           </div>
         </div>
