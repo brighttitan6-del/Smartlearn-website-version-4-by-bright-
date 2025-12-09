@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { CATEGORIES, MOCK_LESSONS, UPCOMING_LIVE_SESSIONS, MOCK_USERS, MOCK_BOOKS } from '../services/mockData';
-import { UserRole, User, Lesson, Book, LiveSession } from '../types';
+import { CATEGORIES, MOCK_LESSONS, UPCOMING_LIVE_SESSIONS, MOCK_USERS } from '../services/mockData';
+import { UserRole, User, Lesson, LiveSession } from '../types';
 import { Navigate, Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
@@ -11,6 +11,23 @@ export const Dashboard: React.FC = () => {
   const [adminTab, setAdminTab] = useState('overview');
   const [adminUsers, setAdminUsers] = useState<User[]>(MOCK_USERS);
   const [adminLessons, setAdminLessons] = useState<Lesson[]>(MOCK_LESSONS);
+
+  // --- STATE FOR ADMIN FINANCE ---
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawForm, setWithdrawForm] = useState({ amount: '', phone: '', provider: 'AIRTEL' as 'AIRTEL' | 'TNM' });
+  const [isProcessingWithdrawal, setIsProcessingWithdrawal] = useState(false);
+  // Mock transactions
+  const [adminTransactions, setAdminTransactions] = useState([
+      { id: 'tx1', type: 'INCOME', source: 'Subscription: Weekly (John S.)', amount: 10000, date: '10 Mar, 14:30', status: 'COMPLETED' },
+      { id: 'tx2', type: 'INCOME', source: 'Book: Physics Principles', amount: 4500, date: '10 Mar, 12:15', status: 'COMPLETED' },
+      { id: 'tx3', type: 'WITHDRAWAL', source: 'Cashout to 0999***456', amount: 250000, date: '09 Mar, 09:00', status: 'PROCESSED' },
+      { id: 'tx4', type: 'INCOME', source: 'Live Class: Math', amount: 500, date: '09 Mar, 08:45', status: 'COMPLETED' },
+      { id: 'tx5', type: 'INCOME', source: 'Subscription: Monthly', amount: 35000, date: '08 Mar, 16:20', status: 'COMPLETED' },
+  ]);
+
+  // Mock Balances
+  const [availableBalance, setAvailableBalance] = useState(2154500);
+  const totalRevenue = 2500000;
 
   // --- STATE FOR TEACHER DASHBOARD ---
   const [teacherTab, setTeacherTab] = useState('overview');
@@ -31,6 +48,44 @@ export const Dashboard: React.FC = () => {
 
   const isTeacher = user.role === UserRole.TEACHER;
   const isAdmin = user.role === UserRole.ADMIN;
+
+  // --- HANDLERS (Admin Finance) ---
+  const handleWithdrawSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(withdrawForm.amount);
+    
+    if (amount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
+    }
+    if (amount > availableBalance) {
+        alert("Insufficient funds for this withdrawal.");
+        return;
+    }
+
+    setIsProcessingWithdrawal(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+        const newTx = {
+            id: `tx-${Date.now()}`,
+            type: 'WITHDRAWAL',
+            source: `Cashout to ${withdrawForm.phone} (${withdrawForm.provider})`,
+            amount: amount,
+            date: new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+            status: 'PENDING'
+        };
+        
+        setAdminTransactions(prev => [newTx, ...prev]);
+        setAvailableBalance(prev => prev - amount);
+        
+        setIsProcessingWithdrawal(false);
+        setShowWithdrawModal(false);
+        setWithdrawForm({ amount: '', phone: '', provider: 'AIRTEL' });
+        
+        alert(`Withdrawal of MWK ${amount.toLocaleString()} initiated successfully.`);
+    }, 2000);
+  };
 
   // --- HANDLERS (Teacher) ---
   const handleEditSession = (session: LiveSession) => {
@@ -66,34 +121,52 @@ export const Dashboard: React.FC = () => {
   // ----------------------------------------------------------------------
   const AdminDashboardComponent = () => (
     <div className="space-y-6 animate-fade-in pb-20">
-      <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg border border-slate-700">
-          <h2 className="text-2xl font-bold mb-1">Admin Control Center</h2>
-          <p className="opacity-80 text-sm">Welcome back, Administrator. You have full system access.</p>
+      <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg border border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Admin Control Center</h2>
+            <p className="opacity-80 text-sm">Welcome back, Administrator. You have full system access.</p>
+          </div>
+          <button onClick={() => setShowWithdrawModal(true)} className="bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-lg hover:shadow-primary-600/20">
+             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+             Quick Withdraw
+          </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="text-slate-500 text-xs font-bold uppercase">Users</div>
-          <div className="text-3xl font-bold mt-1">{adminUsers.length}</div>
+          <div className="text-3xl font-bold mt-1 dark:text-white">{adminUsers.length}</div>
         </div>
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-slate-500 text-xs font-bold uppercase">Revenue</div>
+          <div className="text-slate-500 text-xs font-bold uppercase">Total Revenue</div>
           <div className="text-3xl font-bold text-green-600 mt-1">MWK 2.5M</div>
         </div>
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="text-slate-500 text-xs font-bold uppercase">Pending</div>
-          <div className="text-3xl font-bold text-amber-500 mt-1">{adminUsers.filter(u => u.isPendingTeacher).length}</div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+          <div className="relative z-10">
+              <div className="text-slate-500 text-xs font-bold uppercase flex justify-between items-center">
+                  Wallet Balance
+              </div>
+              <div className="text-2xl lg:text-3xl font-bold text-primary-600 mt-1">MWK {(availableBalance / 1000000).toFixed(2)}M</div>
+          </div>
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-primary-500"></div>
+          <button 
+            onClick={() => { setAdminTab('finance'); setShowWithdrawModal(true); }}
+            className="absolute top-2 right-2 p-1 text-primary-600 hover:text-primary-800 transition-colors bg-primary-50 dark:bg-slate-800 rounded-full" 
+            title="Withdraw"
+          >
+             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+          </button>
         </div>
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="text-slate-500 text-xs font-bold uppercase">Videos</div>
-          <div className="text-3xl font-bold mt-1">{adminLessons.length}</div>
+          <div className="text-3xl font-bold mt-1 dark:text-white">{adminLessons.length}</div>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-1 overflow-x-auto">
-        {['overview', 'users', 'content'].map(tab => (
+        {['overview', 'users', 'content', 'finance'].map(tab => (
             <button 
                 key={tab}
                 onClick={() => setAdminTab(tab)} 
@@ -106,15 +179,95 @@ export const Dashboard: React.FC = () => {
 
       {/* Tab Content */}
       {adminTab === 'overview' && (
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-              <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-white">System Status</h3>
-              <p className="text-green-500 font-bold flex items-center gap-2"><span className="w-3 h-3 bg-green-500 rounded-full"></span> All Systems Operational</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column */}
+              <div className="lg:col-span-2 space-y-6">
+                  {/* System Status */}
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-white">System Status</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/20 rounded-lg">
+                               <div className="p-2 bg-green-100 dark:bg-green-800 rounded-full">
+                                   <svg className="w-5 h-5 text-green-600 dark:text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                               </div>
+                               <div>
+                                   <p className="font-bold text-green-700 dark:text-green-400 text-sm">All Systems Operational</p>
+                                   <p className="text-xs text-green-600/70">Last checked: Just now</p>
+                               </div>
+                           </div>
+                           <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg">
+                               <div className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full">
+                                   <svg className="w-5 h-5 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                               </div>
+                               <div>
+                                   <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">{adminUsers.length} Active Users</p>
+                                   <p className="text-xs text-slate-500">Platform engagement</p>
+                               </div>
+                           </div>
+                      </div>
+                  </div>
+                  
+                  {/* Recent Transactions Preview */}
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                      <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800">
+                          <h3 className="font-bold text-slate-900 dark:text-white">Recent Transactions</h3>
+                          <button onClick={() => setAdminTab('finance')} className="text-sm text-primary-600 font-medium hover:underline">View All</button>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {adminTransactions.slice(0, 5).map(tx => (
+                              <div key={tx.id} className="p-4 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                      <div className={`p-2 rounded-full ${tx.type === 'INCOME' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                          {tx.type === 'INCOME' 
+                                            ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" /></svg>
+                                            : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 13l-5 5m0 0l-5-5m5 5V6" /></svg>
+                                          }
+                                      </div>
+                                      <div>
+                                          <p className="text-sm font-medium text-slate-900 dark:text-white">{tx.source}</p>
+                                          <p className="text-xs text-slate-500">{tx.date}</p>
+                                      </div>
+                                  </div>
+                                  <span className={`font-bold text-sm ${tx.type === 'INCOME' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
+                                      {tx.type === 'INCOME' ? '+' : '-'} MWK {tx.amount.toLocaleString()}
+                                  </span>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              </div>
+
+              {/* Right Col - Quick Actions */}
+              <div className="space-y-6">
+                 <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                    <h3 className="font-bold text-lg mb-2">Withdraw Funds</h3>
+                    <p className="text-indigo-100 text-sm mb-4">You have <span className="font-bold text-white">MWK {availableBalance.toLocaleString()}</span> available.</p>
+                    <button onClick={() => setShowWithdrawModal(true)} className="w-full py-3 bg-white text-indigo-700 font-bold rounded-xl hover:bg-indigo-50 transition-colors shadow-lg flex items-center justify-center gap-2">
+                        <span>Initiate Withdrawal</span>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                    </button>
+                 </div>
+                 
+                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+                     <h3 className="font-bold text-sm text-slate-500 uppercase mb-4">Quick Links</h3>
+                     <div className="space-y-2">
+                         <button onClick={() => setAdminTab('users')} className="w-full text-left p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium flex items-center justify-between group">
+                             <span>Review Teacher Applications</span>
+                             <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full group-hover:bg-red-200">{adminUsers.filter(u => u.isPendingTeacher).length}</span>
+                         </button>
+                         <button onClick={() => setAdminTab('content')} className="w-full text-left p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium flex items-center justify-between">
+                             <span>Manage Content Library</span>
+                             <span className="text-slate-400">→</span>
+                         </button>
+                     </div>
+                 </div>
+              </div>
           </div>
       )}
 
       {adminTab === 'users' && (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <h3 className="p-4 font-bold border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800">Teacher Approvals</h3>
+            <h3 className="p-4 font-bold border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white">Teacher Approvals</h3>
             {adminUsers.filter(u => u.isPendingTeacher).length === 0 ? (
                 <p className="p-8 text-center text-slate-500">No pending teacher applications.</p>
             ) : (
@@ -141,7 +294,7 @@ export const Dashboard: React.FC = () => {
       
       {adminTab === 'content' && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-              <h3 className="p-4 font-bold border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800">Manage Content</h3>
+              <h3 className="p-4 font-bold border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white">Manage Content</h3>
               <div className="divide-y dark:divide-slate-800 max-h-96 overflow-y-auto">
                   {adminLessons.map(l => (
                       <div key={l.id} className="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -159,6 +312,165 @@ export const Dashboard: React.FC = () => {
                   ))}
               </div>
           </div>
+      )}
+
+      {/* FINANCE TAB CONTENT */}
+      {adminTab === 'finance' && (
+          <div className="space-y-6 animate-fade-in">
+              {/* Balance Card Big */}
+              <div className="bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 p-8 rounded-2xl shadow-xl text-white flex flex-col md:flex-row justify-between items-center">
+                  <div className="mb-6 md:mb-0">
+                      <p className="text-slate-400 font-medium mb-1">Available Balance</p>
+                      <h2 className="text-4xl font-extrabold tracking-tight">MWK {availableBalance.toLocaleString()}</h2>
+                      <p className="text-xs text-slate-500 mt-2">Total Life-time Revenue: MWK {totalRevenue.toLocaleString()}</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowWithdrawModal(true)}
+                    className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-bold shadow-lg shadow-primary-600/30 transition-all flex items-center gap-2"
+                  >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Withdraw Funds
+                  </button>
+              </div>
+
+              {/* Transaction History */}
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                  <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+                      <h3 className="font-bold text-lg text-slate-900 dark:text-white">Transaction History</h3>
+                      <button className="text-sm text-primary-600 hover:text-primary-700 font-medium">Download Report</button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase font-medium">
+                            <tr>
+                                <th className="px-6 py-3">Source / Destination</th>
+                                <th className="px-6 py-3">Type</th>
+                                <th className="px-6 py-3">Date</th>
+                                <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {adminTransactions.map((tx) => (
+                                <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                                        {tx.source}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${tx.type === 'INCOME' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {tx.type}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-slate-500">{tx.date}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`flex items-center gap-1.5 ${tx.status === 'PENDING' ? 'text-amber-500' : 'text-slate-500'}`}>
+                                            {tx.status === 'PENDING' && <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>}
+                                            {tx.status}
+                                        </span>
+                                    </td>
+                                    <td className={`px-6 py-4 text-right font-bold ${tx.type === 'INCOME' ? 'text-green-600' : 'text-slate-900 dark:text-slate-300'}`}>
+                                        {tx.type === 'INCOME' ? '+' : '-'} MWK {Math.abs(tx.amount).toLocaleString()}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* WITHDRAW MODAL */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 shadow-2xl animate-scale-in">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">Withdraw Funds</h3>
+                        <p className="text-sm text-slate-500">Transfer available funds to mobile money.</p>
+                    </div>
+                    <button onClick={() => setShowWithdrawModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <form onSubmit={handleWithdrawSubmit} className="space-y-4">
+                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-4">
+                        <p className="text-sm text-slate-500">Available to Withdraw</p>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">MWK {availableBalance.toLocaleString()}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Withdrawal Amount</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">MWK</span>
+                            <input 
+                                type="number" 
+                                required
+                                max={availableBalance}
+                                min={500}
+                                className="w-full pl-14 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-primary-500"
+                                placeholder="0.00"
+                                value={withdrawForm.amount}
+                                onChange={(e) => setWithdrawForm({...withdrawForm, amount: e.target.value})}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Destination Provider</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setWithdrawForm({...withdrawForm, provider: 'AIRTEL'})}
+                                className={`py-3 border rounded-xl font-bold text-sm transition-all ${
+                                    withdrawForm.provider === 'AIRTEL' 
+                                    ? 'bg-red-50 border-red-500 text-red-700' 
+                                    : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400'
+                                }`}
+                            >
+                                Airtel Money
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setWithdrawForm({...withdrawForm, provider: 'TNM'})}
+                                className={`py-3 border rounded-xl font-bold text-sm transition-all ${
+                                    withdrawForm.provider === 'TNM' 
+                                    ? 'bg-green-50 border-green-500 text-green-700' 
+                                    : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400'
+                                }`}
+                            >
+                                TNM Mpamba
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Phone Number</label>
+                        <input 
+                            type="tel"
+                            required
+                            placeholder="e.g. 099..."
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-primary-500"
+                            value={withdrawForm.phone}
+                            onChange={(e) => setWithdrawForm({...withdrawForm, phone: e.target.value})}
+                        />
+                    </div>
+
+                    <div className="pt-2">
+                        <button 
+                            type="submit" 
+                            disabled={isProcessingWithdrawal || !withdrawForm.amount || !withdrawForm.phone}
+                            className="w-full py-4 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all"
+                        >
+                            {isProcessingWithdrawal ? 'Processing Payout...' : 'Confirm Withdrawal'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
       )}
     </div>
   );
